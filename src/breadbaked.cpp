@@ -1,16 +1,15 @@
 /*
- * Project myProject
- * Author: Your Name
- * Date:
- * For comprehensive documentation and examples, please visit:
- * https://docs.particle.io/firmware/best-practices/firmware-template/
+ * Project Breadbaked
+ * Author: Jon Jaques
+ * Date: 11/26/2024
  */
 
-// Include Particle Device OS APIs
 #include "Particle.h"
+#include "../lib/LiquidCrystal/src/LiquidCrystal.h"
+#include "breadbaked.h"
 
 // Let Device OS manage the connection to the Particle Cloud
-SYSTEM_MODE(AUTOMATIC);
+SYSTEM_MODE(SEMI_AUTOMATIC);
 
 // Run the application and system concurrently in separate threads
 SYSTEM_THREAD(ENABLED);
@@ -19,18 +18,62 @@ SYSTEM_THREAD(ENABLED);
 // View logs with CLI using 'particle serial monitor --follow'
 SerialLogHandler logHandler(LOG_LEVEL_INFO);
 
-const long vitalsInterval = 60 * 15; // 15 mins
+// LCD Pinout
+// ==========
+int dE = D0;
+int dRS = D1;
+
+int dD0 = D2;
+int dD1 = D3;
+int dD2 = D4;
+int dD3 = D5;
+
+/**
+ * LiquidCrystal::LiquidCrystal(uint8_t rs,  uint8_t enable,
+ *      uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3)
+ */
+LiquidCrystal lcd(dRS, dE, dD0, dD1, dD2, dD3);
+
+const long vitalsInterval = 60 * 15; // 15 mins (in sec)
 const long blinkInterval = 5 * 1000; // 5 sec
-const long potInterval = 5 * 1000;   // 5 sec
+
+// Onboard LED
+int led1 = D7;
 
 unsigned long blinkPrevMillis = 0;
-unsigned long potPrevMillis = 0;
-
-int potPin = A0;
-int led1 = D7;
-int led2 = D6;
 int blinkState = 0;
-int potValue;
+
+void setup()
+{
+    // cloud registration
+    Particle.function("updateMessage", updateMessage);
+    Particle.publishVitals(vitalsInterval);
+
+    // LED setup
+    pinMode(led1, OUTPUT);
+    ledToggle("off");
+
+    // LCD setup
+    updateMessage("Hello World");
+
+    // Connect to the Particle Cloud
+    Particle.connect();
+}
+
+void loop()
+{
+}
+
+void blinkLed(int times, int interval)
+{
+    for (int i = 0; i < times; i++)
+    {
+        ledToggle("on");
+        delay(interval);
+        ledToggle("off");
+        delay(interval);
+    }
+}
 
 int ledToggle(String command)
 {
@@ -50,60 +93,11 @@ int ledToggle(String command)
     }
 }
 
-void setup()
+int updateMessage(String message)
 {
-    // setup
-    pinMode(potPin, INPUT);
-    pinMode(led1, OUTPUT);
-    pinMode(led2, OUTPUT);
-
-    // initial state
-    ledToggle("off");
-
-    // cloud registration
-    Particle.function("led", ledToggle);
-    Particle.publishVitals(vitalsInterval);
-}
-
-void loop()
-{
-    unsigned long currentMillis = millis();
-
-    // blink onboard LED
-    if (currentMillis - blinkPrevMillis >= blinkInterval)
-    {
-        blinkPrevMillis = currentMillis;
-        if (blinkState == 0)
-        {
-            blinkState = ledToggle("on");
-        }
-        else
-        {
-            blinkState = ledToggle("off");
-        }
-    }
-
-    // read potentiometer (0-4095)
-    int currPotValue = analogRead(potPin);
-
-    // write it to the LED
-    if (currPotValue > 20)
-    {
-        analogWrite(led2, currPotValue / 4);
-    }
-    else
-    {
-        analogWrite(led2, 0);
-    }
-
-    // publish potentiometer value
-    if (currentMillis - potPrevMillis >= potInterval)
-    {
-        potPrevMillis = currentMillis;
-        if (currPotValue != potValue)
-        {
-            potValue = currPotValue;
-            Particle.publish("test/pot", String(potValue));
-        }
-    }
+    blinkLed(5, 100);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(message);
+    return 1;
 }
